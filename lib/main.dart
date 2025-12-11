@@ -1,9 +1,11 @@
+
 import 'package:first_flutter/data/models/sentence.dart';
 import 'package:first_flutter/data/repositories/sentence_repository.dart';
+import 'package:first_flutter/data/services/authentication_service.dart';
 import 'package:first_flutter/data/services/sentence_service.dart';
+import 'package:first_flutter/presentation/viewmodels/authentication_vm.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'presentation/viewmodels/sentence_vm.dart';
 
 void main() {
@@ -11,18 +13,29 @@ void main() {
     MultiProvider(
       providers: [
         Provider<ISentenceService>(
-          create: (context) => SentenceService(), // ISentenceService instance
+          create: (context) => SentenceService(),
         ),
         Provider<ISentenceRepository>(
           create: (context) => SentenceRepository(
             sentenceService: context.read(),
-          ), //ISentenceRepository instance
+          ),
+        ),
+
+        Provider<IAuthenticationService>(
+          create: (context) => AuthenticationService(),
+        ),
+        
+        ChangeNotifierProvider(
+          create: (context) => AuthenticationVM(
+            authService: context.read<IAuthenticationService>(),
+          ),
         ),
       ],
       child: const MyApp(),
     ),
   );
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -48,7 +61,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  var selectedIndex = 0; // ← Add this property.
+  var selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -60,63 +73,60 @@ class _MyHomePageState extends State<MyHomePage> {
       case 1:
         page = FavoritesPage();
         break;
+      case 2:
+        page = LoginPage();
+        break;
       default:
         throw UnimplementedError('no widget for $selectedIndex');
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 450) {
-          return Scaffold(
-            body: Row(children: [MainArea(page: page)]),
-            bottomNavigationBar: NavigationBar(
-              destinations: [
-                NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-                NavigationDestination(
-                  icon: Icon(Icons.favorite),
-                  label: 'Favorites',
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 450) {
+        return Scaffold(
+          body: Row(children: [MainArea(page: page)]),
+          bottomNavigationBar: NavigationBar(
+            destinations: [
+              NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+              NavigationDestination(icon: Icon(Icons.favorite), label: 'Favorites'),
+              NavigationDestination(icon: Icon(Icons.login), label: 'Login'),
+            ],
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (value) {
+              setState(() {
+                selectedIndex = value;
+              });
+            },
+          ),
+        );
+      } else {
+        return Scaffold(
+          body: Row(
+            children: [
+              SafeArea(
+                child: NavigationRail(
+                  extended: constraints.maxWidth >= 800,
+                  destinations: [
+                    NavigationRailDestination(
+                        icon: Icon(Icons.home), label: Text('Home')),
+                    NavigationRailDestination(
+                        icon: Icon(Icons.favorite), label: Text('Favorites')),
+                    NavigationRailDestination(
+                        icon: Icon(Icons.login), label: Text('Login')),
+                  ],
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (value) {
+                    setState(() {
+                      selectedIndex = value;
+                    });
+                  },
                 ),
-              ],
-              selectedIndex: selectedIndex,
-              onDestinationSelected: (value) {
-                setState(() {
-                  selectedIndex = value;
-                });
-              },
-            ),
-          );
-        } else {
-          return Scaffold(
-            body: Row(
-              children: [
-                SafeArea(
-                  child: NavigationRail(
-                    extended: constraints.maxWidth >= 800, // ← Here.
-                    destinations: [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home),
-                        label: Text('Home'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.favorite),
-                        label: Text('Favorites'),
-                      ),
-                    ],
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: (value) {
-                      setState(() {
-                        selectedIndex = value;
-                      });
-                    },
-                  ),
-                ),
-                MainArea(page: page),
-              ],
-            ),
-          );
-        }
-      },
-    );
+              ),
+              MainArea(page: page),
+            ],
+          ),
+        );
+      }
+    });
   }
 }
 
@@ -146,17 +156,11 @@ class GeneratorPage extends StatelessWidget {
     }
 
     var sentence = vm.current;
-    IconData icon;
-    if (vm.isFavorite(sentence)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_border;
-    }
+    IconData icon = vm.isFavorite(sentence) ? Icons.favorite : Icons.favorite_border;
 
     return Center(
       child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center, //Main axis is vertical for Column
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Expanded(
             child: ListView(
@@ -173,12 +177,11 @@ class GeneratorPage extends StatelessWidget {
               ],
             ),
           ),
-          Text('A random AWESOME  idea:'),
+          Text('A random AWESOME idea:'),
           BigCard(pair: sentence),
-          // ↓ Add this.
           SizedBox(height: 20),
           Row(
-            mainAxisSize: MainAxisSize.min, // ← Add this.
+            mainAxisSize: MainAxisSize.min,
             children: [
               ElevatedButton.icon(
                 onPressed: () {
@@ -187,7 +190,7 @@ class GeneratorPage extends StatelessWidget {
                 icon: Icon(icon),
                 label: Text('Like'),
               ),
-              SizedBox(width: 20), // ← Add some spacing between buttons.
+              SizedBox(width: 20),
               ElevatedButton(
                 onPressed: () {
                   vm.next();
@@ -211,13 +214,13 @@ class FavoritesPage extends StatelessWidget {
     if (vm.favorites.isEmpty) {
       return Center(child: Text('No favorites yet.'));
     }
+
     return ListView(
       children: [
         Padding(
           padding: const EdgeInsets.all(20),
           child: Text(
-            'You have '
-            '${vm.favorites.length} favorites:',
+            'You have ${vm.favorites.length} favorites:',
           ),
         ),
         for (var word in vm.favorites)
@@ -247,7 +250,8 @@ class BigCard extends StatelessWidget {
     final theme = Theme.of(context);
     final style = theme.textTheme.displayMedium!.copyWith(
       shadows: [
-        Shadow(color: theme.colorScheme.primaryContainer, blurRadius: 10),
+        Shadow(
+            color: theme.colorScheme.primaryContainer, blurRadius: 10),
       ],
       color: theme.colorScheme.onPrimary,
     );
@@ -257,6 +261,65 @@ class BigCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Text(pair.text, style: style),
+      ),
+    );
+  }
+}
+
+
+
+
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _userController = TextEditingController();
+  final _passController = TextEditingController();
+
+  String? loggedUser;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 400,
+        padding: EdgeInsets.all(30),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _userController,
+              decoration: InputDecoration(labelText: "Enter Username"),
+            ),
+            SizedBox(height: 20),
+            TextField(
+              controller: _passController,
+              decoration: InputDecoration(labelText: "Enter Password"),
+              obscureText: true,
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  loggedUser = _userController.text.trim();
+                });
+              },
+              child: Text("Login"),
+            ),
+            SizedBox(height: 20),
+            Text(
+              loggedUser == null
+                  ? "Not logged in yet."
+                  : "Logged as: $loggedUser",
+            ),
+          ],
+        ),
       ),
     );
   }
