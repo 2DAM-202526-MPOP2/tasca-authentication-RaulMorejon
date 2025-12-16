@@ -1,5 +1,7 @@
 
+ 
 import 'package:first_flutter/data/models/sentence.dart';
+import 'package:first_flutter/data/repositories/authentication_repository.dart'; 
 import 'package:first_flutter/data/repositories/sentence_repository.dart';
 import 'package:first_flutter/data/services/authentication_service.dart';
 import 'package:first_flutter/data/services/sentence_service.dart';
@@ -12,6 +14,7 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        
         Provider<ISentenceService>(
           create: (context) => SentenceService(),
         ),
@@ -20,16 +23,27 @@ void main() {
             sentenceService: context.read(),
           ),
         ),
-
+    
         Provider<IAuthenticationService>(
           create: (context) => AuthenticationService(),
         ),
         
-        ChangeNotifierProvider(
-          create: (context) => AuthenticationVM(
+        
+        Provider<IAuthenticationRepository>(
+          create: (context) => AuthenticationRepository(
             authService: context.read<IAuthenticationService>(),
           ),
         ),
+
+        
+        ChangeNotifierProvider(
+          create: (context) => AuthenticationVM(
+            
+            authRepository: context.read<IAuthenticationRepository>(),
+          ),
+        ),
+        
+        
       ],
       child: const MyApp(),
     ),
@@ -267,8 +281,6 @@ class BigCard extends StatelessWidget {
 }
 
 
-
-
 class LoginPage extends StatefulWidget {
   @override
   _LoginPageState createState() => _LoginPageState();
@@ -278,10 +290,17 @@ class _LoginPageState extends State<LoginPage> {
   final _userController = TextEditingController();
   final _passController = TextEditingController();
 
-  String? loggedUser;
+  @override
+  void dispose() {
+    _userController.dispose();
+    _passController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final authVM = context.watch<AuthenticationVM>();
+
     return Center(
       child: Container(
         width: 400,
@@ -305,19 +324,43 @@ class _LoginPageState extends State<LoginPage> {
             ),
             SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  loggedUser = _userController.text.trim();
-                });
-              },
-              child: Text("Login"),
+              onPressed: authVM.isLoading
+                  ? null 
+                  : () async {
+                      
+                      await authVM.login(
+                        _userController.text.trim(),
+                        _passController.text.trim(),
+                      );
+                      
+                      if (authVM.currentUser != null) {
+                        _userController.clear();
+                        _passController.clear();
+                      }
+                    },
+              child: authVM.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ) 
+                  : Text("Login"),
             ),
             SizedBox(height: 20),
-            Text(
-              loggedUser == null
-                  ? "Not logged in yet."
-                  : "Logged as: $loggedUser",
-            ),
+          
+            if (authVM.isLoading)
+              Text("Logging in...")
+            else if (authVM.errorMessage != null)
+              Text(
+                "Error: ${authVM.errorMessage}",
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              )
+            else
+              Text(
+                authVM.currentUser == null
+                    ? "Not logged in yet."
+                    : "Logged as: ${authVM.currentUser!.username} (ID: ${authVM.currentUser!.id})",
+              ),
           ],
         ),
       ),

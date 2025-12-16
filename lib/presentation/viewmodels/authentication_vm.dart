@@ -1,11 +1,13 @@
+
 import 'package:flutter/material.dart';
-import 'package:first_flutter/data/services/authentication_service.dart';
 import 'package:first_flutter/data/models/user.dart';
+import 'package:first_flutter/data/repositories/authentication_repository.dart';
 
 class AuthenticationVM extends ChangeNotifier {
-  final IAuthenticationService authService;
+  final IAuthenticationRepository authRepository;
 
-  AuthenticationVM({required this.authService});
+  
+  AuthenticationVM({required this.authRepository});
 
   User? currentUser;
   bool isLoading = false;
@@ -16,8 +18,7 @@ class AuthenticationVM extends ChangeNotifier {
       isLoading = true;
       errorMessage = null;
       notifyListeners();
-
-      final user = await authService.validateLogin(username, password);
+      final user = await authRepository.validateLogin(username, password);
 
       currentUser = user;
     } catch (e) {
